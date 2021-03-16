@@ -1,0 +1,71 @@
+name: auto build engine
+
+on: 
+  release:
+    types: [published]
+  schedule:
+    - cron: "0 16 * * *"
+  push:
+    branches: 
+      - master
+  watch:
+    types: [started]
+   
+jobs:
+  build:
+    runs-on: ubuntu-20.04
+    
+    steps:
+    - name: Install build depedencies
+      run: |
+        sudo apt update
+        sudo apt install -y flex bison libelf-dev
+    
+    - name: Bulid kernel
+      run: |
+        git clone https://github.com/torvalds/linux.git --depth 1
+        wget --no-check-certificate https://raw.githubusercontent.com/ActiveIce/WSL2-Linux-Kernel/master/0001-msft-wsl.patch
+        pushd linux
+        #git clone https://github.com/microsoft/WSL2-Linux-Kernel -b linux-msft-wsl-5.4.y --depth 1
+        #pushd WSL2-Linux-Kernel
+        git apply ../0001-msft-wsl.patch --reject
+        wget --no-check-certificate -O .config https://raw.githubusercontent.com/microsoft/WSL2-Linux-Kernel/linux-msft-wsl-5.4.y/Microsoft/config-wsl
+        #sed -i "s/# CONFIG_NUMA is not set/CONFIG_NUMA=y/" .config
+        make olddefconfig
+        make -j$(nproc) LOCALVERSION=""
+        popd
+
+    - name: Upload kernel
+      uses: actions/upload-artifact@master
+      with:
+        name: bzImage
+        path: linux/arch/x86/boot/bzImage
+
+  push:
+    needs: build
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Checkout
+      uses: actions/checkout@master
+    
+    - name: Clean
+      run: |
+        rm bzImage
+    
+    - name: Download kernel
+      uses: actions/download-artifact@master
+      with:
+        name: bzImage
+        path: ./
+    
+    - name: Commit
+      run: |
+        git config --global user.email "actions@github.com"
+        git config --global user.name "GitHub Actions"
+        git checkout --orphan new_branch
+        git add -A
+        git commit -am "update new file"
+        git branch -D master
+        git branch -m master
+        git push origin master --force
