@@ -1,0 +1,38 @@
+From 5e7c629e377747278edb54ca301fc98387739713 Mon Sep 17 00:00:00 2001
+From: GitHub Actions <actions@github.com>
+Date: Tue, 23 Jul 2024 20:07:04 +0800
+Subject: [PATCH] fix
+
+---
+ drivers/hv/dxgkrnl/dxgkrnl.h   | 1 +
+ drivers/hv/dxgkrnl/dxgmodule.c | 2 +-
+ 2 files changed, 2 insertions(+), 1 deletion(-)
+
+diff --git a/drivers/hv/dxgkrnl/dxgkrnl.h b/drivers/hv/dxgkrnl/dxgkrnl.h
+index d816a875d5ab..fd8c89b5b1ee 100644
+--- a/drivers/hv/dxgkrnl/dxgkrnl.h
++++ b/drivers/hv/dxgkrnl/dxgkrnl.h
+@@ -31,6 +31,7 @@
+ #include "misc.h"
+ #include "hmgr.h"
+ #include <uapi/misc/d3dkmthk.h>
++#include <linux/vmalloc.h>
+ 
+ struct dxgprocess;
+ struct dxgadapter;
+diff --git a/drivers/hv/dxgkrnl/dxgmodule.c b/drivers/hv/dxgkrnl/dxgmodule.c
+index c2a4a2a2136f..cac6198977cb 100644
+--- a/drivers/hv/dxgkrnl/dxgmodule.c
++++ b/drivers/hv/dxgkrnl/dxgmodule.c
+@@ -175,7 +175,7 @@ void signal_host_cpu_event(struct dxghostevent *eventhdr)
+ 	}
+ 	if (event->cpu_event) {
+ 		DXG_TRACE("signal cpu event");
+-		eventfd_signal(event->cpu_event, 1);
++		eventfd_signal(event->cpu_event);
+ 		if (event->destroy_after_signal)
+ 			eventfd_ctx_put(event->cpu_event);
+ 	} else {
+-- 
+2.43.0
+
