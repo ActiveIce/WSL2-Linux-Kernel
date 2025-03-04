@@ -1,0 +1,52 @@
+From f8ba0b19f5e8c0faaa35af3d9ce09ee07d114680 Mon Sep 17 00:00:00 2001
+From: GitHub Actions <actions@github.com>
+Date: Thu, 27 Feb 2025 15:25:36 +0800
+Subject: [PATCH] fix
+
+---
+ drivers/hv/dxgkrnl/dxgkrnl.h   | 1 +
+ drivers/hv/dxgkrnl/dxgmodule.c | 2 +-
+ drivers/hv/dxgkrnl/dxgvmbus.c  | 2 +-
+ 3 files changed, 3 insertions(+), 2 deletions(-)
+
+diff --git a/drivers/hv/dxgkrnl/dxgkrnl.h b/drivers/hv/dxgkrnl/dxgkrnl.h
+index d816a875d..fd8c89b5b 100644
+--- a/drivers/hv/dxgkrnl/dxgkrnl.h
++++ b/drivers/hv/dxgkrnl/dxgkrnl.h
+@@ -31,6 +31,7 @@
+ #include "misc.h"
+ #include "hmgr.h"
+ #include <uapi/misc/d3dkmthk.h>
++#include <linux/vmalloc.h>
+ 
+ struct dxgprocess;
+ struct dxgadapter;
+diff --git a/drivers/hv/dxgkrnl/dxgmodule.c b/drivers/hv/dxgkrnl/dxgmodule.c
+index c2a4a2a21..cac619897 100644
+--- a/drivers/hv/dxgkrnl/dxgmodule.c
++++ b/drivers/hv/dxgkrnl/dxgmodule.c
+@@ -175,7 +175,7 @@ void signal_host_cpu_event(struct dxghostevent *eventhdr)
+ 	}
+ 	if (event->cpu_event) {
+ 		DXG_TRACE("signal cpu event");
+-		eventfd_signal(event->cpu_event, 1);
++		eventfd_signal(event->cpu_event);
+ 		if (event->destroy_after_signal)
+ 			eventfd_ctx_put(event->cpu_event);
+ 	} else {
+diff --git a/drivers/hv/dxgkrnl/dxgvmbus.c b/drivers/hv/dxgkrnl/dxgvmbus.c
+index abb6d2af8..f950de225 100644
+--- a/drivers/hv/dxgkrnl/dxgvmbus.c
++++ b/drivers/hv/dxgkrnl/dxgvmbus.c
+@@ -689,7 +689,7 @@ int dxgvmb_send_create_process(struct dxgprocess *process)
+ 	command->process_id = process->pid;
+ 	command->linux_process = 1;
+ 	s[0] = 0;
+-	__get_task_comm(s, WIN_MAX_PATH, current);
++	get_task_comm(s, current);
+ 	for (i = 0; i < WIN_MAX_PATH; i++) {
+ 		command->process_name[i] = s[i];
+ 		if (s[i] == 0)
+-- 
+2.43.0
+
