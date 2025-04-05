@@ -12,7 +12,7 @@ on:
     types: [started]
    
 jobs:
-  build:
+  build-mainline:
     runs-on: ubuntu-24.04
     
     steps:
@@ -38,6 +38,29 @@ jobs:
         #scripts/config --disable PREEMPT_NONE
         #scripts/config --enable PREEMPT_RT
         make -j$(nproc) KCONFIG_CONFIG=Microsoft/config-wsl LOCALVERSION=""
+        cp ./arch/x86/boot/bzImage ./arch/x86/boot/bzImage-mainline
+        popd
+
+    - name: Upload kernel
+      uses: actions/upload-artifact@main
+      with:
+        name: bzImage-mainline
+        path: linux/arch/x86/boot/bzImage-mainline
+
+  build-msft:
+    runs-on: ubuntu-24.04
+    
+    steps:
+    - name: Install build depedencies
+      run: |
+        sudo apt update
+        sudo apt install -y flex bison libelf-dev dwarves
+    
+    - name: Bulid kernel
+      run: |
+        git clone https://github.com/microsoft/WSL2-Linux-Kernel --depth 1 linux
+        pushd WSL2-Linux-Kernel
+        make -j$(nproc) KCONFIG_CONFIG=Microsoft/config-wsl LOCALVERSION=""
         popd
 
     - name: Upload kernel
@@ -47,7 +70,7 @@ jobs:
         path: linux/arch/x86/boot/bzImage
 
   push:
-    needs: build
+    needs: [build-mainline, build-msft]
     runs-on: ubuntu-24.04
     
     steps:
@@ -56,9 +79,15 @@ jobs:
     
     - name: Clean
       run: |
-        rm bzImage
+        rm bzImage*
     
-    - name: Download kernel
+    - name: Download mainline kernel
+      uses: actions/download-artifact@main
+      with:
+        name: bzImage-mainline
+        path: ./
+
+    - name: Download msft kernel
       uses: actions/download-artifact@main
       with:
         name: bzImage
