@@ -1,0 +1,66 @@
+--- dxgkrnl.patch	2025-04-25 01:04:47.556289243 +0800
++++ dxgkrnl_fix.patch	2025-04-25 12:34:28.939890604 +0800
+@@ -88,7 +88,7 @@
+  drivers/hv/Makefile            |   1 +
+  drivers/hv/dxgkrnl/Kconfig     |  26 ++
+  drivers/hv/dxgkrnl/Makefile    |   5 +
+- drivers/hv/dxgkrnl/dxgkrnl.h   | 155 ++++++++++
++ drivers/hv/dxgkrnl/dxgkrnl.h   | 156 ++++++++++
+  drivers/hv/dxgkrnl/dxgmodule.c | 506 +++++++++++++++++++++++++++++++++
+  drivers/hv/dxgkrnl/dxgvmbus.c  |  92 ++++++
+  drivers/hv/dxgkrnl/dxgvmbus.h  |  19 ++
+@@ -130,15 +130,17 @@
+  
+ +source "drivers/hv/dxgkrnl/Kconfig"
+ +
+- endmenu
++ config MSHV_ROOT
++ 	tristate "Microsoft Hyper-V root partition support"
++	depends on HYPERV && (X86_64 || ARM64)
+ diff --git a/drivers/hv/Makefile b/drivers/hv/Makefile
+ index d76df5c8c2a9..aa1cbdb5d0d2 100644
+ --- a/drivers/hv/Makefile
+ +++ b/drivers/hv/Makefile
+ @@ -2,6 +2,7 @@
+- obj-$(CONFIG_HYPERV)		+= hv_vmbus.o
+  obj-$(CONFIG_HYPERV_UTILS)	+= hv_utils.o
+  obj-$(CONFIG_HYPERV_BALLOON)	+= hv_balloon.o
++ obj-$(CONFIG_MSHV_ROOT)		+= mshv_root.o
+ +obj-$(CONFIG_DXGKRNL)		+= dxgkrnl/
+  
+  CFLAGS_hv_trace.o = -I$(src)
+@@ -191,7 +193,7 @@
+ index 000000000000..f7900840d1ed
+ --- /dev/null
+ +++ b/drivers/hv/dxgkrnl/dxgkrnl.h
+-@@ -0,0 +1,155 @@
++@@ -0,0 +1,156 @@
+ +/* SPDX-License-Identifier: GPL-2.0 */
+ +
+ +/*
+@@ -208,6 +210,7 @@
+ +#ifndef _DXGKRNL_H
+ +#define _DXGKRNL_H
+ +
+++#include <linux/vmalloc.h>
+ +#include <linux/uuid.h>
+ +#include <linux/kernel.h>
+ +#include <linux/mutex.h>
+@@ -3598,7 +3601,7 @@
+ +	command->process_id = process->pid;
+ +	command->linux_process = 1;
+ +	s[0] = 0;
+-+	__get_task_comm(s, WIN_MAX_PATH, current);
+++	get_task_comm(s, current);
+ +	for (i = 0; i < WIN_MAX_PATH; i++) {
+ +		command->process_name[i] = s[i];
+ +		if (s[i] == 0)
+@@ -10344,7 +10347,7 @@
+ +	}
+ +	if (event->cpu_event) {
+ +		DXG_TRACE("signal cpu event");
+-+		eventfd_signal(event->cpu_event, 1);
+++		eventfd_signal(event->cpu_event);
+ +		if (event->destroy_after_signal)
+ +			eventfd_ctx_put(event->cpu_event);
+ +	} else {
