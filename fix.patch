@@ -1,0 +1,99 @@
+--- dxgkrnl.patch	2025-10-09 16:21:06.122958500 +0800
++++ dxgkrnl_fix.patch	2025-10-09 17:06:43.697483011 +0800
+@@ -125,8 +125,8 @@ index 862c47b191af..b16c7701da19 100644
+ --- a/drivers/hv/Kconfig
+ +++ b/drivers/hv/Kconfig
+ @@ -55,4 +55,6 @@ config HYPERV_BALLOON
+- 	help
+- 	  Select this option to enable Hyper-V Balloon driver.
++ 
++ 	  If unsure, say N.
+  
+ +source "drivers/hv/dxgkrnl/Kconfig"
+ +
+@@ -136,9 +136,9 @@ index d76df5c8c2a9..aa1cbdb5d0d2 100644
+ --- a/drivers/hv/Makefile
+ +++ b/drivers/hv/Makefile
+ @@ -2,6 +2,7 @@
+- obj-$(CONFIG_HYPERV)		+= hv_vmbus.o
+- obj-$(CONFIG_HYPERV_UTILS)	+= hv_utils.o
+  obj-$(CONFIG_HYPERV_BALLOON)	+= hv_balloon.o
++ obj-$(CONFIG_MSHV_ROOT)		+= mshv_root.o
++ obj-$(CONFIG_MSHV_VTL)          += mshv_vtl.o
+ +obj-$(CONFIG_DXGKRNL)		+= dxgkrnl/
+  
+  CFLAGS_hv_trace.o = -I$(src)
+@@ -191,7 +191,7 @@ new file mode 100644
+ index 000000000000..f7900840d1ed
+ --- /dev/null
+ +++ b/drivers/hv/dxgkrnl/dxgkrnl.h
+-@@ -0,0 +1,155 @@
++@@ -0,0 +1,156 @@
+ +/* SPDX-License-Identifier: GPL-2.0 */
+ +
+ +/*
+@@ -208,6 +208,7 @@ index 000000000000..f7900840d1ed
+ +#ifndef _DXGKRNL_H
+ +#define _DXGKRNL_H
+ +
+++#include <linux/vmalloc.h>
+ +#include <linux/uuid.h>
+ +#include <linux/kernel.h>
+ +#include <linux/mutex.h>
+@@ -3598,7 +3599,7 @@ index 6d4b8d9d8d07..0abf45d0d3f7 100644
+ +	command->process_id = process->pid;
+ +	command->linux_process = 1;
+ +	s[0] = 0;
+-+	__get_task_comm(s, WIN_MAX_PATH, current);
+++	get_task_comm(s, current);
+ +	for (i = 0; i < WIN_MAX_PATH; i++) {
+ +		command->process_name[i] = s[i];
+ +		if (s[i] == 0)
+@@ -10344,7 +10345,7 @@ index 9bc8931c5043..5a5ca8791d27 100644
+ +	}
+ +	if (event->cpu_event) {
+ +		DXG_TRACE("signal cpu event");
+-+		eventfd_signal(event->cpu_event, 1);
+++		eventfd_signal(event->cpu_event);
+ +		if (event->destroy_after_signal)
+ +			eventfd_ctx_put(event->cpu_event);
+ +	} else {
+@@ -21939,7 +21940,7 @@ new file mode 100644
+ index 000000000000..88fd78f08fbe
+ --- /dev/null
+ +++ b/drivers/hv/dxgkrnl/dxgsyncfile.c
+-@@ -0,0 +1,215 @@
++@@ -0,0 +1,198 @@
+ +// SPDX-License-Identifier: GPL-2.0
+ +
+ +/*
+@@ -22131,29 +22132,12 @@ index 000000000000..88fd78f08fbe
+ +	return true;
+ +}
+ +
+-+static void dxgdmafence_value_str(struct dma_fence *fence,
+-+				  char *str, int size)
+-+{
+-+	snprintf(str, size, "%lld", fence->seqno);
+-+}
+-+
+-+static void dxgdmafence_timeline_value_str(struct dma_fence *fence,
+-+					   char *str, int size)
+-+{
+-+	struct dxgsyncpoint *syncpoint;
+-+
+-+	syncpoint = to_syncpoint(fence);
+-+	snprintf(str, size, "%lld", syncpoint->fence_value);
+-+}
+-+
+ +static const struct dma_fence_ops dxgdmafence_ops = {
+ +	.get_driver_name = dxgdmafence_get_driver_name,
+ +	.get_timeline_name = dxgdmafence_get_timeline_name,
+ +	.enable_signaling = dxgdmafence_enable_signaling,
+ +	.signaled = dxgdmafence_signaled,
+ +	.release = dxgdmafence_release,
+-+	.fence_value_str = dxgdmafence_value_str,
+-+	.timeline_value_str = dxgdmafence_timeline_value_str,
+ +};
+ diff --git a/drivers/hv/dxgkrnl/dxgsyncfile.h b/drivers/hv/dxgkrnl/dxgsyncfile.h
+ new file mode 100644
