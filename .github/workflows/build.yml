@@ -1,0 +1,120 @@
+name: auto build engine
+
+on: 
+  release:
+    types: [published]
+  schedule:
+    - cron: "0 16 * * *"
+  push:
+    branches: 
+      - master
+  watch:
+    types: [started]
+   
+jobs:
+  build-mainline:
+    runs-on: ubuntu-24.04
+    
+    steps:
+    - name: Install ccache
+      uses: hendrikmuhs/ccache-action@main
+      with:
+        key: build-mainline
+        max-size: 2048M
+        evict-old-files: 1d
+    
+    - name: Install build depedencies
+      run: |
+        sudo apt update
+        sudo apt install -y flex bison libelf-dev dwarves
+    
+    - name: Bulid kernel
+      run: |
+        git clone https://github.com/torvalds/linux.git --depth 1 linux
+        #git clone https://github.com/microsoft/WSL2-Linux-Kernel --depth 1 linux
+        #git clone https://git.kernel.org/pub/scm/linux/kernel/git/rt/linux-rt-devel.git -b for-kbuild-bot/current-stable --depth 1 linux
+        wget --no-check-certificate https://raw.githubusercontent.com/ActiveIce/WSL2-Linux-Kernel/master/dxgkrnl.patch
+        wget --no-check-certificate https://raw.githubusercontent.com/ActiveIce/WSL2-Linux-Kernel/master/fix.patch
+        pushd linux
+        patch ../dxgkrnl.patch < ../fix.patch
+        git apply ../dxgkrnl.patch --reject
+        #git apply ../fix.patch --reject
+        #dxgkrnl patch fix commit
+        #120ae58593630819209a011a3f9c89f73bcc9894
+        #0069455bcbf9ea73ffe4553ed6d2b4e4cad703de
+        wget --no-check-certificate -P Microsoft https://raw.githubusercontent.com/microsoft/WSL2-Linux-Kernel/linux-msft-wsl-6.6.y/arch/x86/configs/config-wsl
+        #scripts/config --disable PREEMPT_NONE
+        #scripts/config --enable PREEMPT_RT
+        make -j$(nproc) KCONFIG_CONFIG=Microsoft/config-wsl LOCALVERSION="" CC="ccache gcc"
+        cp ./arch/x86/boot/bzImage ./arch/x86/boot/bzImage-mainline
+        popd
+    
+    - name: Upload kernel
+      uses: actions/upload-artifact@main
+      with:
+        name: bzImage-mainline
+        path: linux/arch/x86/boot/bzImage-mainline
+
+  build-msft:
+    runs-on: ubuntu-24.04
+    
+    steps:
+    - name: Install ccache
+      uses: hendrikmuhs/ccache-action@main
+      with:
+        key: build-msft
+        max-size: 2048M
+        evict-old-files: 1d
+    
+    - name: Install build depedencies
+      run: |
+        sudo apt update
+        sudo apt install -y flex bison libelf-dev dwarves
+    
+    - name: Bulid kernel
+      run: |
+        git clone https://github.com/microsoft/WSL2-Linux-Kernel --depth 1
+        pushd WSL2-Linux-Kernel
+        make -j$(nproc) KCONFIG_CONFIG=Microsoft/config-wsl LOCALVERSION="" CC="ccache gcc"
+        popd
+    
+    - name: Upload kernel
+      uses: actions/upload-artifact@main
+      with:
+        name: bzImage
+        path: WSL2-Linux-Kernel/arch/x86/boot/bzImage
+
+  push:
+    needs: [build-mainline, build-msft]
+    runs-on: ubuntu-24.04
+    
+    steps:
+    - name: Checkout
+      uses: actions/checkout@main
+    
+    - name: Clean
+      run: |
+        rm bzImage*
+    
+    - name: Download mainline kernel
+      uses: actions/download-artifact@main
+      with:
+        name: bzImage-mainline
+        path: ./
+
+    - name: Download msft kernel
+      uses: actions/download-artifact@main
+      with:
+        name: bzImage
+        path: ./
+    
+    - name: Commit
+      run: |
+        git config --global user.email "actions@github.com"
+        git config --global user.name "GitHub Actions"
+        git checkout --orphan new_branch
+        git add -A
+        git commit -am "update new file"
+        git branch -D master
+        git branch -m master
+        git push origin master --force
